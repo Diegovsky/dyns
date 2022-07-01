@@ -1,0 +1,14 @@
+# See https://www.freedesktop.org/software/systemd/man/systemd.service.html for more
+
+[Unit]
+Description=A daemon that periodically updates the Cloudflare DNS entries
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/sbin/dyns
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
