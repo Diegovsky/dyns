@@ -1,8 +1,10 @@
-use std::time::Duration;
+use std::{time::Duration, path::Path};
 
 use anyhow::Context;
 use isahc::{Request, Body, ReadResponseExt};
 
+static CONFIG_FILE: &str = "/etc/dyns.toml";
+static LOG_FILE: &str = "/var/log/dyns.log";
 
 #[derive(Clone, Debug, serde::Deserialize)]
 struct Record {
@@ -18,8 +20,6 @@ struct Config {
     authorization: String,
     records: Vec<Record>,
 }
-
-static CONFIG_FILE: &str = "/etc/dyns.toml";
 
 #[derive(Clone, Debug, serde::Deserialize)]
 struct RecordInfo {
@@ -88,26 +88,30 @@ fn get_current_ip(client: &mut isahc::HttpClient) -> anyhow::Result<String> {
         
 }
 use clap::Parser;
-use simplelog::{CombinedLogger, SimpleLogger, WriteLogger};
+use simplelog::{CombinedLogger, SimpleLogger, WriteLogger, SharedLogger};
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Cli {
-    #[clap(short, long)]
+    #[clap(short, long, help="Where config file is (defaults to /etc/dyns.toml)")]
     config: Option<String>,
+    #[clap(short, long, help="Where error logs should be written (defaults to /var/log/dyns.log)")]
+    log_file: Option<String>,
 }
 
-fn init_logger() {
+fn init_logger(log_file: impl AsRef<Path>) {
     use log::LevelFilter;
     use simplelog::Config;
-    let queue = userv_foundation::telsend::open_queue().expect("Failed to open userv queue");
-    CombinedLogger::init(vec![
-                         SimpleLogger::new(LevelFilter::Info, Config::default()),
-                         WriteLogger::new(LevelFilter::Error, Config::default(), queue)]).unwrap();
+    let mut loggers: Vec<Box<dyn SharedLogger>> = vec![SimpleLogger::new(LevelFilter::Info, Config::default())];
+    match std::fs::File::create(log_file) {
+        Ok(file) => loggers.push(WriteLogger::new(LevelFilter::Error, Config::default(), file)),
+        Err(e) => { log::error!("Failed to open error log file: {}", e); },
+    }
+    CombinedLogger::init(loggers).unwrap();
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    init_logger();
+    init_logger(cli.log_file.as_deref().unwrap_or(LOG_FILE));
 
     let cfg = std::fs::read_to_string(cli.config.as_deref().unwrap_or(CONFIG_FILE))?;
     let cfg = toml::from_str::<Config>(&cfg)?;
