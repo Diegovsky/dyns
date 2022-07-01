@@ -173,7 +173,6 @@ dependencies = [
  "serde_json",
  "simplelog",
  "toml",
- "userv-foundation",
 ]
 
 [[package]]
@@ -774,10 +773,6 @@ dependencies = [
  "matches",
  "percent-encoding",
 ]
-
-[[package]]
-name = "userv-foundation"
-version = "0.1.0"
 
 [[package]]
 name = "vcpkg"

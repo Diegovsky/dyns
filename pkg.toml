@@ -1,5 +1,5 @@
 name="dyns"
 
 [files]
-'target/release/dyns'='/usr/local/bin/'
+'target/release/dyns'='/usr/local/sbin/'
 'dyns.service'='/etc/systemd/system/'

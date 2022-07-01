@@ -7,7 +7,7 @@ Wants=network-online.target
 
 [Service]
 Type=exec
-ExecStart=/sbin/dyns
+ExecStart=/usr/local/sbin/dyns
 Restart=on-failure
 
 [Install]

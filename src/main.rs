@@ -18,6 +18,7 @@ struct Config {
     email: String,
     auth_key: String,
     authorization: String,
+    log_file: Option<String>,
     records: Vec<Record>,
 }
 
@@ -111,10 +112,12 @@ fn init_logger(log_file: impl AsRef<Path>) {
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    init_logger(cli.log_file.as_deref().unwrap_or(LOG_FILE));
 
     let cfg = std::fs::read_to_string(cli.config.as_deref().unwrap_or(CONFIG_FILE))?;
-    let cfg = toml::from_str::<Config>(&cfg)?;
+    let mut cfg = toml::from_str::<Config>(&cfg)?;
+
+    init_logger(cli.log_file.or(cfg.log_file.take()).as_deref().unwrap_or(LOG_FILE));
+
     let records = &cfg.records;
     let mut client = isahc::HttpClient::new()?;
     let mut ip = get_current_ip(&mut client)?;
