@@ -14,11 +14,17 @@ struct Record {
 
 #[derive(Clone, Debug, serde::Deserialize)]
 struct Config {
-    zone_id: String,
     email: String,
     auth_key: String,
     authorization: String,
     log_file: Option<String>,
+    zones: Vec<ZoneConfig>
+}
+
+#[derive(Clone, Debug, serde::Deserialize)]
+struct ZoneConfig {
+    zone_id: String,
+    name: String,
     records: Vec<Record>,
 }
 
@@ -45,8 +51,8 @@ struct UpdateRecordBody<'a> {
     proxy: bool,
 }
 
-fn get_dns_record_id(client: &mut isahc::HttpClient, cfg: &Config, name: &str) -> anyhow::Result<String> {
-    let url = format!("https://api.cloudflare.com/client/v4/zones/{}/dns_records", cfg.zone_id);
+fn get_dns_record_id(client: &mut isahc::HttpClient, cfg: &Config, zone_id: &str, name: &str) -> anyhow::Result<String> {
+    let url = format!("https://api.cloudflare.com/client/v4/zones/{}/dns_records", zone_id);
     let mut response = client.send(Request::get(url)
                 .header("X-auth-email", &cfg.email)
                 .header("x-auth-key", &cfg.auth_key)
@@ -64,9 +70,9 @@ fn get_dns_record_id(client: &mut isahc::HttpClient, cfg: &Config, name: &str) -
 
 
 
-fn update_record(client: &mut isahc::HttpClient, cfg: &Config, record: &Record, ip: &str) -> anyhow::Result<()> {
-    let record_id = get_dns_record_id(client, cfg, &record.name)?;
-    let url = format!("https://api.cloudflare.com/client/v4/zones/{}/dns_records/{}", cfg.zone_id, record_id);
+fn update_record(client: &mut isahc::HttpClient, cfg: &Config, zone_id: &str, record: &Record, ip: &str) -> anyhow::Result<()> {
+    let record_id = get_dns_record_id(client, cfg, zone_id, &record.name)?;
+    let url = format!("https://api.cloudflare.com/client/v4/zones/{}/dns_records/{}", zone_id, record_id);
     client.send(Request::patch(url)
                 .header("X-auth-email", &cfg.email)
                 .header("x-auth-key", &cfg.auth_key)
@@ -116,16 +122,21 @@ fn main() -> anyhow::Result<()> {
     let cfg = std::fs::read_to_string(cli.config.as_deref().unwrap_or(CONFIG_FILE))?;
     let mut cfg = toml::from_str::<Config>(&cfg)?;
 
+    if cfg.zones.len() == 0 {
+        anyhow::bail!("No zones specified");
+    }
+
     init_logger(cli.log_file.or(cfg.log_file.take()).as_deref().unwrap_or(LOG_FILE));
 
-    let records = &cfg.records;
     let mut client = isahc::HttpClient::new()?;
     let mut ip = get_current_ip(&mut client)?;
     loop {
-        for record in records {
-            if let Err(e) = update_record(&mut client, &cfg, record, &ip) {
-                log::error!("An error happened while updating record for {}: {}", record.name, e);
-                return Err(e);
+        for zone in &cfg.zones {
+            for record in &zone.records {
+                if let Err(e) = update_record(&mut client, &cfg, &zone.zone_id, record, &ip) {
+                    log::error!("An error happened while updating record {} of zone {}: {}", zone.name, record.name, e);
+                    return Err(e);
+                }
             }
         }
         loop {
